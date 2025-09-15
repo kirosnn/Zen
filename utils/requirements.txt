@@ -1,0 +1,9 @@
+openai >= 1.13.3
+crewai
+crewai-tools
+
+python-dotenv
+requests
+rich
+browser_use
+playwright
