@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-
 class ChatTool(BaseTool):
     name: str = "Chat Tool"
     description: str = """
@@ -25,9 +24,12 @@ class ChatTool(BaseTool):
     api_url: str = "http://localhost:11434/api/generate"
     system_prompt: Optional[str] = None
 
-    def __init__(self, model: str = "mistral:7b", base_url: str = "http://localhost:11434", system_prompt: Optional[str] = None, **kwargs):
+    def __init__(self, model: Optional[str] = None, base_url: str = "http://localhost:11434", system_prompt: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
-        self.model = model
+        if model is None:
+            self.model = os.getenv("OLLAMA_MODEL", "mistral:7b")
+        else:
+            self.model = model
         self.base_url = base_url
         self.api_url = f"{base_url}/api/generate"
         self.system_prompt = system_prompt
@@ -74,7 +76,7 @@ class ChatTool(BaseTool):
             if stream:
                 return self._handle_streaming_response(payload)
             else:
-                response = requests.post(self.api_url, json=payload, timeout=30)
+                response = requests.post(self.api_url, json=payload, timeout=300)
 
                 if response.status_code == 200:
                     result = response.json()
@@ -91,7 +93,7 @@ class ChatTool(BaseTool):
 
     def _handle_streaming_response(self, payload: Dict[str, Any]) -> str:
         try:
-            response = requests.post(self.api_url, json=payload, stream=True, timeout=60)
+            response = requests.post(self.api_url, json=payload, stream=True, timeout=600)
             
             if response.status_code != 200:
                 return f"Error: Ollama API returned status code {response.status_code}. Make sure Ollama is running and the model '{self.model}' is installed."
@@ -123,7 +125,9 @@ class ChatTool(BaseTool):
 
 
 class ChatAgent:
-    def __init__(self, model: str = "mistral:7b", system_prompt: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, system_prompt: Optional[str] = None):
+        if model is None:
+            model = os.getenv("OLLAMA_MODEL", "mistral:7b")
         self.chat_tool = ChatTool(model=model, system_prompt=system_prompt)
         self.agent = self._create_agent()
 
@@ -174,6 +178,8 @@ class ChatAgent:
             return self.chat_tool._run(message, stream=stream)
 
 
-def simple_chat(message: str, model: str = "mistral:7b", system_prompt: Optional[str] = None, stream: bool = False) -> str:
+def simple_chat(message: str, model: Optional[str] = None, system_prompt: Optional[str] = None, stream: bool = False) -> str:
+    if model is None:
+        model = os.getenv("OLLAMA_MODEL", "mistral:7b")
     tool = ChatTool(model=model, system_prompt=system_prompt)
     return tool._run(message, stream=stream)

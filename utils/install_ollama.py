@@ -4,18 +4,22 @@ import time
 import requests
 from typing import Optional, Tuple
 import logging
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 class OllamaInstaller:
-    """Utility class for installing and managing Ollama on Windows."""
-
-    def __init__(self, model: str = "mistral:7b", base_url: str = "http://localhost:11434"):
-        self.model = model
+    def __init__(self, model: Optional[str] = None, base_url: str = "http://localhost:11434"):
+        if model is None:
+            self.model = os.getenv("OLLAMA_MODEL", "mistral:7b")
+        else:
+            self.model = model
         self.base_url = base_url
 
     def is_ollama_installed(self) -> bool:
-        """Check if Ollama is installed on the system."""
         try:
             result = subprocess.run(
                 ["ollama", "--version"],
@@ -30,9 +34,7 @@ class OllamaInstaller:
             return False
 
     def install_ollama(self) -> Tuple[bool, str]:
-        """Install Ollama using winget or provide manual instructions."""
         try:
-            # Try to install using winget
             print("Installing Ollama using winget...")
             result = subprocess.run(
                 ["winget", "install", "--id", "Ollama.Ollama", "--accept-source-agreements", "--accept-package-agreements"],
@@ -40,7 +42,7 @@ class OllamaInstaller:
                 text=True,
                 encoding='utf-8',
                 errors='replace',
-                timeout=300  # 5 minutes timeout
+                timeout=300
             )
 
             if result.returncode == 0:
@@ -50,7 +52,6 @@ class OllamaInstaller:
                 return False, f"Winget installation failed: {result.stderr}"
 
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            # Winget not available or failed
             manual_instructions = """
 Ollama is not installed. Please install it manually:
 
@@ -64,7 +65,6 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
             return False, manual_instructions
 
     def is_ollama_running(self) -> bool:
-        """Check if Ollama service is running."""
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             return response.status_code == 200
@@ -72,10 +72,8 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
             return False
 
     def start_ollama(self) -> Tuple[bool, str]:
-        """Start the Ollama service."""
         try:
             print("Starting Ollama service...")
-            # Start ollama serve in background
             process = subprocess.Popen(
                 ["ollama", "serve"],
                 stdout=subprocess.DEVNULL,
@@ -83,7 +81,6 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
             )
 
-            # Wait a bit for service to start
             time.sleep(3)
 
             if self.is_ollama_running():
@@ -96,7 +93,6 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
             return False, f"Failed to start Ollama: {str(e)}"
 
     def is_model_available(self, model: Optional[str] = None) -> bool:
-        """Check if a specific model is available."""
         model = model or self.model
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
@@ -108,7 +104,6 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
             return False
 
     def pull_model(self, model: Optional[str] = None) -> Tuple[bool, str]:
-        """Pull a model from Ollama registry."""
         model = model or self.model
         try:
             print(f"Pulling model {model}...")
@@ -118,7 +113,7 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
                 text=True,
                 encoding='utf-8',
                 errors='replace',
-                timeout=600  # 10 minutes timeout for model download
+                timeout=600
             )
 
             if result.returncode == 0:
@@ -133,27 +128,22 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
             return False, "Ollama command not found"
 
     def ensure_ollama_ready(self) -> Tuple[bool, str]:
-        """Ensure Ollama is installed, running, and has the required model."""
         messages = []
 
-        # Check if installed
         if not self.is_ollama_installed():
             success, msg = self.install_ollama()
             messages.append(msg)
             if not success:
                 return False, "\n".join(messages)
 
-        # Check if running
         if not self.is_ollama_running():
             success, msg = self.start_ollama()
             messages.append(msg)
             if not success:
                 return False, "\n".join(messages)
 
-            # Give it a moment after starting
             time.sleep(2)
 
-        # Check if model is available
         if not self.is_model_available():
             success, msg = self.pull_model()
             messages.append(msg)
@@ -162,8 +152,9 @@ winget install --id Ollama.Ollama --accept-source-agreements --accept-package-ag
 
         return True, "✓ Ollama is ready!"
 
-def setup_ollama(model: str = "mistral:7b", base_url: str = "http://localhost:11434") -> bool:
-    """Convenience function to set up Ollama completely."""
+def setup_ollama(model: Optional[str] = None, base_url: str = "http://localhost:11434") -> bool:
+    if model is None:
+        model = os.getenv("OLLAMA_MODEL", "mistral:7b")
     installer = OllamaInstaller(model, base_url)
     success, message = installer.ensure_ollama_ready()
 
@@ -179,7 +170,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Install and set up Ollama for Zen.")
-    parser.add_argument("--model", default="mistral:7b", help="Model to pull (default: mistral:7b)")
+    parser.add_argument("--model", default=os.getenv("OLLAMA_MODEL", "mistral:7b"), help="Model to pull (default: mistral:7b)")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama base URL")
 
     args = parser.parse_args()
