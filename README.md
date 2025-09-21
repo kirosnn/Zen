@@ -224,4 +224,4 @@ See `.env.example` for a complete list. Key variables:
 
 ## License
 
-MIT (or your preferred license). Replace this section if you use a different license.
+MIT
